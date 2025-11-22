@@ -184,4 +184,5 @@ async def delete_item_image(item_id: int, image_id: int):
     raise HTTPException(status_code=404, detail="Image not found")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
