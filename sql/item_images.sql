@@ -1,0 +1,8 @@
+CREATE TABLE Item_Images (
+  image_id   INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  item_id    INT UNSIGNED NOT NULL,
+  image_url  VARCHAR(1024) NOT NULL,
+  CONSTRAINT fk_item_images_item FOREIGN KEY (item_id) REFERENCES Items(item_id)
+    ON UPDATE CASCADE ON DELETE CASCADE
+);
+--Note: one-to-many relationships between Items and Item_Images
