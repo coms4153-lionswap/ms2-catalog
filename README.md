@@ -104,9 +104,7 @@ uvicorn main:app --reload
 ```
 
 ### 3. Open:
-- Local API → http://127.0.0.1:8000  
 - Swagger UI → http://127.0.0.1:8000/docs  
-- ReDoc → http://127.0.0.1:8000/redoc
 
 ---
 
@@ -151,13 +149,6 @@ curl "https://<CLOUD_RUN_URL>/items?limit=50&offset=0"
 
 ---
 
-## 🧹 TODO / Future Improvements
-- Auth (JWT / Google Identity)
-- Cloud Storage integration for real image uploads
-- Background tasks (Celery / Cloud Tasks)
-- Caching layer (Redis)
-
----
 
 ## 👤 Author
 **Can Yang**  
