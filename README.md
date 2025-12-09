@@ -1,73 +1,164 @@
-# Catalog Service
-deployed in Cloud Run: https://catalog-1003140017553.us-east1.run.app/docs
+# 📦 Catalog Service — FastAPI + Cloud Run + Cloud SQL
 
-## Features
+Deployed on Cloud Run: **https://catalog-1003140017553.us-east1.run.app/docs**
 
-- CRUD operations for catalog items
-- RESTful API endpoints
-- Automatic API documentation with Swagger UI
-- Pydantic models for data validation
-- Health check endpoint
+A production-ready microservice for managing catalog items and item images.  
+Fully built with **FastAPI**, **SQLAlchemy ORM**, and deployed using **Google Cloud Run** with a **Cloud SQL (MySQL)** backend.
 
-## API Endpoints
+---
 
-- `GET /` - Welcome message
-- `GET /health` - Health check
-- `GET /items` - Get all items
-- `GET /items/{item_id}` - Get item by ID
-- `POST /items` - Create new item
-- `PUT /items/{item_id}` - Update item
-- `DELETE /items/{item_id}` - Delete item
-- `GET /items/category/{category}` - Get items by category
+## 🚀 Features
 
-## Setup
+### ✅ Item Management
+- Create / Retrieve / Update / Delete items  
+- Filter by category, price range, and status  
+- Pagination support (`limit`, `offset`)  
+- Automatic ID assignment  
 
-1. Install dependencies:
+### 🖼 Item Image Management
+- Attach images to items  
+- Update image details  
+- Retrieve image sets  
+- Delete images  
+
+### 🧩 API Documentation
+- Interactive Swagger UI → `/docs`
+- OpenAPI schema → `/openapi.json`
+
+### 🛡 Stability & Validation
+- Pydantic models  
+- Error handling  
+- Health check endpoint (`/health`)
+
+---
+
+## 🧱 Tech Stack
+
+| Component | Technology |
+|----------|------------|
+| API Framework | FastAPI |
+| ORM | SQLAlchemy |
+| Database | MySQL (Cloud SQL) |
+| Deployment | Google Cloud Run |
+| Build | Cloud Build |
+| Language | Python 3.11 |
+
+---
+
+## 📁 Project Structure
+
+```
+catalog-service/
+│
+├── main.py                 # FastAPI app, DB engine, routes
+├── models/
+│   ├── item.py             # Item schemas & validation
+│   └── item_image.py       # Image schemas
+│
+├── sql/
+│   ├── items.sql           # Table DDL
+│   └── item_images.sql     # Table DDL
+│
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## ⚙️ Environment Variables
+
+The service loads DB configuration from:
+
+```
+DATABASE_URL
+```
+
+### Local Development (SQLite fallback)
+
+If `DATABASE_URL` is not set, the app automatically uses:
+
+```
+sqlite:///./catalog.db
+```
+
+### Cloud Run + Cloud SQL (MySQL)
+
+Example:
+
+```
+mysql+pymysql://root:PASSWORD@/Catalog_db?unix_socket=/cloudsql/PROJECT:REGION:INSTANCE
+```
+
+---
+
+## 🧪 Running Locally
+
+### 1. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Run the application:
+### 2. Start the server
 ```bash
-python main.py
+uvicorn main:app --reload
 ```
 
-3. Access the API:
-- API: http://localhost:8000
-- Interactive API docs (Swagger UI): http://localhost:8000/docs
-- Alternative API docs (ReDoc): http://localhost:8000/redoc
+### 3. Open:
+- Local API → http://127.0.0.1:8000  
+- Swagger UI → http://127.0.0.1:8000/docs  
+- ReDoc → http://127.0.0.1:8000/redoc
 
-## Example Usage
+---
 
-### Create an item
+## ☁️ Deploying to Cloud Run
+
+### 1. Push code to GitHub  
+Cloud Build automatically triggers and builds the container.
+
+### 2. Configure Cloud Run
+- Set **container image URL** to the built Artifact Registry image  
+- Attach Cloud SQL instance  
+- Add environment variable:
+
+```
+DATABASE_URL = mysql+pymysql://root:PASSWORD@/Catalog_db?unix_socket=/cloudsql/PROJECT:REGION:INSTANCE
+```
+
+### 3. Deploy
+
+Cloud Run will run the container and expose your API securely.
+
+---
+
+## 🧪 Example API Usage
+
+### Create an Item
 ```bash
-curl -X POST "http://localhost:8000/items" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "name": "Laptop",
-       "description": "High-performance laptop",
-       "price": 999.99,
-       "category": "Electronics"
-     }'
+curl -X POST "https://<CLOUD_RUN_URL>/items" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "Golf Club",
+        "description": "Driver",
+        "price": 199.99,
+        "status": "ACTIVE"
+      }'
 ```
 
-### Get all items
+### Get Items
 ```bash
-curl -X GET "http://localhost:8000/items"
+curl "https://<CLOUD_RUN_URL>/items?limit=50&offset=0"
 ```
 
-### Get item by ID
-```bash
-curl -X GET "http://localhost:8000/items/1"
-```
+---
 
-## Data Model
+## 🧹 TODO / Future Improvements
+- Auth (JWT / Google Identity)
+- Cloud Storage integration for real image uploads
+- Background tasks (Celery / Cloud Tasks)
+- Caching layer (Redis)
 
-```python
-class Item(BaseModel):
-    id: Optional[int] = None
-    name: str
-    description: Optional[str] = None
-    price: float
-    category: str
-```
+---
+
+## 👤 Author
+**Can Yang**  
+FastAPI Developer | Cloud Run | SQL | Python  
