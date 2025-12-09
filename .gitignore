@@ -32,3 +32,6 @@ build/
 
 # Local database files
 *.db
+
+# Upload Images
+uploads/

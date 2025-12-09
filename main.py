@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
 from typing import List, Optional
 from datetime import datetime
 import uvicorn
 import os
+import shutil
 
 from sqlalchemy import (
     create_engine,
@@ -15,6 +16,8 @@ from sqlalchemy import (
     ForeignKey,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
+
+from fastapi.responses import FileResponse
 
 from models.item import Item, ItemCreate, ItemUpdate, ItemStatus
 from models.item_image import ItemImage, ItemImageCreate, ItemImageUpdate
@@ -40,6 +43,10 @@ else:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Directory to store uploaded image files (for local and Cloud Run ephemeral storage)
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -443,6 +450,36 @@ async def delete_item_image(item_id: int, image_id: int, db: Session = Depends(g
     db.delete(db_image)
     db.commit()
     return {"message": "Image deleted successfully"}
+
+
+# ===== IMAGE UPLOAD / SERVE ENDPOINTS =====
+
+@app.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    """Upload an image file and return a URL that can be used to display it.
+
+    This endpoint saves the file under the local `uploads` directory and
+    returns a relative URL like `/images/{filename}`. The frontend can then
+    render the image via an <img> tag using that URL.
+    """
+    file_location = os.path.join(UPLOAD_DIR, file.filename)
+
+    # Save the uploaded file to disk
+    with open(file_location, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {"image_url": f"/images/{file.filename}"}
+
+
+@app.get("/images/{filename}")
+async def get_uploaded_image(filename: str):
+    """Serve an uploaded image file by filename."""
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return FileResponse(file_path)
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
