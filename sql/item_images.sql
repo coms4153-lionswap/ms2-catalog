@@ -5,4 +5,3 @@ CREATE TABLE Item_Images (
   CONSTRAINT fk_item_images_item FOREIGN KEY (item_id) REFERENCES Items(item_id)
     ON UPDATE CASCADE ON DELETE CASCADE
 );
---Note: one-to-many relationships between Items and Item_Images
