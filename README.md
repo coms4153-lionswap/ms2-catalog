@@ -1,6 +1,5 @@
 # Catalog Service
-
-A simple FastAPI service for managing catalog items.
+deployed in Cloud Run: https://catalog-1003140017553.us-east1.run.app/docs
 
 ## Features
 
