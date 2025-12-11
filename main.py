@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Header, status
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Header, status, Security
 from typing import List, Optional
 from datetime import datetime
 import uvicorn
@@ -7,6 +7,7 @@ import shutil
 import jwt
 from typing import Any
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import (
     create_engine,
     Column,
@@ -23,6 +24,7 @@ from fastapi.responses import FileResponse
 
 from models.item import Item, ItemCreate, ItemUpdate, ItemStatus
 from models.item_image import ItemImage, ItemImageCreate, ItemImageUpdate
+from fastapi.middleware.cors import CORSMiddleware
 
 # Create FastAPI instance
 app = FastAPI(
@@ -44,17 +46,16 @@ else:
     engine = create_engine(DATABASE_URL)
 
 # JWT configuration for extracting current user id
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key")
+SECRET_KEY = os.getenv("SECRET_KEY", "LION_SWAP_GOAT_IS_THE_KEY")
 ALGORITHM = "HS256"
 
+security = HTTPBearer()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # Directory to store uploaded image files (for local and Cloud Run ephemeral storage)
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -107,34 +108,44 @@ def get_db():
     finally:
         db.close()
 
-def current_user_id(authorization: Optional[str] = Header(None)) -> int:
+def current_user_id(credentials: HTTPAuthorizationCredentials = Security(security)) -> int:
     """
     Extract the current user id from the JWT access token in the Authorization header.
 
-    For local development, if the Authorization header is missing or invalid,
-    fall back to a default user_id = 1 so that requests do not fail with 422.
+    The token is decoded using HS256 and SECRET_KEY, and the `sub` claim is used as user_id.
     """
-    # If no header is provided, or we're not yet integrating with real auth,
-    # just return a default user id for testing.
-    if not authorization:
-        return 1
-
-    # Try to parse a Bearer token, but on any failure, fall back to user_id = 1.
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        return 1
-
-    token = parts[1]
+    token = credentials.credentials
 
     try:
-        payload: Any = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("user_id")
-        if user_id is None:
-            return 1
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    user_id = payload.get("user_id")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token payload missing 'user_id'",
+        )
+
+    # Cast to int if your IDs are integers; otherwise, return as str
+    try:
         return int(user_id)
-    except Exception:
-        # On any decode or cast error, just use default user id.
-        return 1
+    except (TypeError, ValueError):
+        # If your sub is actually a string UNI or something, just return it
+        # or change the return type annotation to -> str
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid user id in token",
+        )
 # Root endpoint
 @app.get("/")
 async def root():
@@ -210,8 +221,7 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
 
 # Create new item
 @app.post("/items", response_model=Item, tags=["Items"])
-async def create_item(item: ItemCreate, db: Session = Depends(get_db), user_id: int = Depends(current_user_id)):
-    """Create a new catalog item"""
+async def create_item(item: ItemCreate, user_id: int = Depends(current_user_id), db: Session = Depends(get_db)):
     now = datetime.now()
     db_item = ItemORM(
         seller_id=user_id,
