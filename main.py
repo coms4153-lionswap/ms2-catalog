@@ -1,9 +1,11 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Header, status
 from typing import List, Optional
 from datetime import datetime
 import uvicorn
 import os
 import shutil
+import jwt
+from typing import Any
 
 from sqlalchemy import (
     create_engine,
@@ -41,6 +43,10 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     engine = create_engine(DATABASE_URL)
 
+# JWT configuration for extracting current user id
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key")
+ALGORITHM = "HS256"
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -63,6 +69,7 @@ class ItemORM(Base):
     __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
+    seller_id = Column(Integer, nullable=False)   # ★ 新增一行
     name = Column(String(255), nullable=False)
     description = Column(String(1024))
     price = Column(Float)
@@ -71,10 +78,7 @@ class ItemORM(Base):
     status = Column(String(50))
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
-
-    images = relationship(
-        "ItemImageORM", back_populates="item", cascade="all, delete-orphan"
-    )
+    images = relationship("ItemImageORM", back_populates="item", cascade="all, delete-orphan")
 
 
 class ItemImageORM(Base):
@@ -103,6 +107,34 @@ def get_db():
     finally:
         db.close()
 
+def current_user_id(authorization: Optional[str] = Header(None)) -> int:
+    """
+    Extract the current user id from the JWT access token in the Authorization header.
+
+    For local development, if the Authorization header is missing or invalid,
+    fall back to a default user_id = 1 so that requests do not fail with 422.
+    """
+    # If no header is provided, or we're not yet integrating with real auth,
+    # just return a default user id for testing.
+    if not authorization:
+        return 1
+
+    # Try to parse a Bearer token, but on any failure, fall back to user_id = 1.
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return 1
+
+    token = parts[1]
+
+    try:
+        payload: Any = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if user_id is None:
+            return 1
+        return int(user_id)
+    except Exception:
+        # On any decode or cast error, just use default user id.
+        return 1
 # Root endpoint
 @app.get("/")
 async def root():
@@ -144,6 +176,7 @@ async def get_items(
     return [
         Item(
             id=i.id,
+            seller_id=i.seller_id,
             name=i.name,
             description=i.description,
             price=i.price,
@@ -159,12 +192,13 @@ async def get_items(
 @app.get("/items/{item_id}", response_model=Item, tags=["Items"])
 async def get_item(item_id: int, db: Session = Depends(get_db)):
     """Get a specific item by ID"""
-    db_item = db.query(ItemORM).filter(ItemORM.id == item_id).first()
+    db_item: Optional[ItemORM] = db.query(ItemORM).filter(ItemORM.id == item_id).first()
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
 
     return Item(
         id=db_item.id,
+        seller_id=db_item.seller_id,
         name=db_item.name,
         description=db_item.description,
         price=db_item.price,
@@ -176,10 +210,11 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
 
 # Create new item
 @app.post("/items", response_model=Item, tags=["Items"])
-async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
+async def create_item(item: ItemCreate, db: Session = Depends(get_db), user_id: int = Depends(current_user_id)):
     """Create a new catalog item"""
     now = datetime.now()
     db_item = ItemORM(
+        seller_id=user_id,
         name=item.name,
         description=item.description,
         price=item.price,
@@ -194,6 +229,7 @@ async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
 
     return Item(
         id=db_item.id,
+        seller_id=db_item.seller_id,
         name=db_item.name,
         description=db_item.description,
         price=db_item.price,
@@ -207,7 +243,7 @@ async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
 @app.put("/items/{item_id}", response_model=Item, tags=["Items"])
 async def update_item(item_id: int, item_update: ItemUpdate, db: Session = Depends(get_db)):
     """Update an existing item"""
-    db_item = db.query(ItemORM).filter(ItemORM.id == item_id).first()
+    db_item:Optional[ItemORM] = db.query(ItemORM).filter(ItemORM.id == item_id).first()
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -225,6 +261,7 @@ async def update_item(item_id: int, item_update: ItemUpdate, db: Session = Depen
 
     return Item(
         id=db_item.id,
+        seller_id=db_item.seller_id,
         name=db_item.name,
         description=db_item.description,
         price=db_item.price,
@@ -259,6 +296,7 @@ async def get_items_by_category(category: str, db: Session = Depends(get_db)):
     return [
         Item(
             id=i.id,
+            seller_id=i.seller_id,
             name=i.name,
             description=i.description,
             price=i.price,
@@ -278,6 +316,7 @@ async def get_items_by_status(status: ItemStatus, db: Session = Depends(get_db))
     return [
         Item(
             id=i.id,
+            seller_id=i.seller_id,
             name=i.name,
             description=i.description,
             price=i.price,

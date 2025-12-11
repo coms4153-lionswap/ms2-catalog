@@ -32,5 +32,6 @@ class ItemUpdate(BaseModel):
 
 class Item(ItemBase):
     id: int
+    seller_id: int
     created_at: datetime
     updated_at: datetime
